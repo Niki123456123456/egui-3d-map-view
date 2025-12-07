@@ -10,13 +10,13 @@ pub struct View {
 pub struct TexturesContainer {
     pub texture: three_d::Texture2D,
     pub depth_texture: three_d::DepthTexture2D,
-    pub texture_id: egui::TextureId,
-    pub program: eframe::glow::NativeProgram,
-    pub vao: eframe::glow::NativeVertexArray,
-    pub vbo: eframe::glow::NativeBuffer,
+    // pub texture_id: egui::TextureId,
+    pub program: three_d::context::Program,
+    pub vao: three_d::context::VertexArray,
+    pub vbo: three_d::context::Buffer,
 }
 
-fn create_program(gl: &egui_glow::glow::Context) -> eframe::glow::NativeProgram {
+fn create_program(gl: &egui_glow::glow::Context) -> three_d::context::Program {
     unsafe {
         // Vertex shader
         let vert_shader = gl
@@ -24,7 +24,12 @@ fn create_program(gl: &egui_glow::glow::Context) -> eframe::glow::NativeProgram 
             .expect("Failed to create vertex shader");
         gl.shader_source(
             vert_shader,
-            r#"#version 330 core
+            r#"#version 300 es
+            precision highp float;
+            precision highp int;
+            precision highp sampler2DArray;
+            precision highp sampler3D;
+
                layout (location = 0) in vec2 a_pos;
 
                out vec2 v_TexCoords;
@@ -49,7 +54,11 @@ fn create_program(gl: &egui_glow::glow::Context) -> eframe::glow::NativeProgram 
             .expect("Failed to create fragment shader");
         gl.shader_source(
             frag_shader,
-            r#"#version 330 core
+            r#"#version 300 es
+            precision highp float;
+            precision highp int;
+            precision highp sampler2DArray;
+            precision highp sampler3D;
 
                uniform sampler2D u_Texture;
 
@@ -71,7 +80,7 @@ fn create_program(gl: &egui_glow::glow::Context) -> eframe::glow::NativeProgram 
         }
 
         // Link program
-        let program: eframe::glow::NativeProgram =
+        let program =
             gl.create_program().expect("Failed to create GL program");
         gl.attach_shader(program, vert_shader);
         gl.attach_shader(program, frag_shader);
@@ -90,7 +99,7 @@ fn create_program(gl: &egui_glow::glow::Context) -> eframe::glow::NativeProgram 
 
 fn create_buffers(
     gl: &egui_glow::glow::Context,
-) -> (eframe::glow::NativeVertexArray, eframe::glow::NativeBuffer) {
+) -> (three_d::context::VertexArray, three_d::context::Buffer) {
     unsafe {
         let vertices: [f32; 12] = [
             -1., -1.,// left bottom
@@ -102,32 +111,32 @@ fn create_buffers(
         ];
 
         // Upload vertex data
-        let vao: eframe::glow::NativeVertexArray =
+        let vao =
             gl.create_vertex_array().expect("Failed to create VAO");
         gl.bind_vertex_array(Some(vao));
 
-        let vbo: eframe::glow::NativeBuffer = gl.create_buffer().expect("Failed to create VBO");
-        gl.bind_buffer(eframe::glow::ARRAY_BUFFER, Some(vbo));
+        let vbo = gl.create_buffer().expect("Failed to create VBO");
+        gl.bind_buffer(three_d::context::ARRAY_BUFFER, Some(vbo));
 
         let bytes: &[u8] = std::slice::from_raw_parts(
             vertices.as_ptr() as *const u8,
             vertices.len() * std::mem::size_of::<f32>(),
         );
-        gl.buffer_data_u8_slice(eframe::glow::ARRAY_BUFFER, bytes, eframe::glow::STATIC_DRAW);
+        gl.buffer_data_u8_slice(three_d::context::ARRAY_BUFFER, bytes, three_d::context::STATIC_DRAW);
 
         // Configure vertex attribute 0 as vec2
         gl.enable_vertex_attrib_array(0);
         gl.vertex_attrib_pointer_f32(
             0,
             2, // vec2
-            eframe::glow::FLOAT,
+            three_d::context::FLOAT,
             false,
             (2 * std::mem::size_of::<f32>()) as i32,
             0,
         );
 
         gl.bind_vertex_array(None);
-        gl.bind_buffer(eframe::glow::ARRAY_BUFFER, None);
+        gl.bind_buffer(three_d::context::ARRAY_BUFFER, None);
 
         return (vao, vbo);
     }
@@ -155,14 +164,14 @@ fn create_textures(
         three_d::Wrapping::ClampToEdge,
         three_d::Wrapping::ClampToEdge,
     );
-    let texture_id = frame.register_native_glow_texture(texture.id());
+    // let texture_id = frame.register_native_glow_texture(texture.id());
     let gl = frame.gl().unwrap().as_ref();
     let program = create_program(gl);
     let (vao, vbo) = create_buffers(gl);
     return TexturesContainer {
         texture,
         depth_texture,
-        texture_id: texture_id,
+        // texture_id: texture_id,
         program,
         vao,
         vbo,
@@ -227,23 +236,26 @@ impl View {
 
             // ui.add(image);
 
-            let t = tex.clone();
+            let vao = tex.vao.clone();
+            let vbo = tex.vbo.clone();
+            let t = tex.texture.id().clone();
+            let program = tex.program.clone();
 
             let callback_fn =
                 egui_glow::CallbackFn::new(move |info: egui::PaintCallbackInfo, painter| unsafe {
                     let gl = painter.gl();
-                    gl.bind_vertex_array(Some(t.vao));
-                    gl.bind_buffer(eframe::glow::ARRAY_BUFFER, Some(t.vbo));
+                    gl.bind_vertex_array(Some(vao));
+                    gl.bind_buffer(three_d::context::ARRAY_BUFFER, Some(vbo));
                     gl.enable_vertex_attrib_array(0);
-                    gl.use_program(Some(t.program));
-                    gl.bind_texture(eframe::glow::TEXTURE_2D, Some(t.texture.id()));
+                    gl.use_program(Some(program));
+                    gl.bind_texture(three_d::context::TEXTURE_2D, Some(t));
 
-                    gl.draw_arrays(eframe::glow::TRIANGLES, 0, 6);
+                    gl.draw_arrays(three_d::context::TRIANGLES, 0, 6);
 
 
-                    gl.bind_texture(eframe::glow::TEXTURE_2D, None);
+                    gl.bind_texture(three_d::context::TEXTURE_2D, None);
                     gl.disable_vertex_attrib_array(0);
-                    gl.bind_buffer(eframe::glow::ARRAY_BUFFER, None);
+                    gl.bind_buffer(three_d::context::ARRAY_BUFFER, None);
                     gl.bind_vertex_array(None);
                     gl.use_program(None);
                 });
@@ -261,6 +273,7 @@ impl View {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn show(
     id_source: impl std::hash::Hash,
     ui: &mut egui::Ui,
@@ -279,6 +292,7 @@ pub fn show(
     );
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn show_advanced(
     id_source: impl std::hash::Hash,
     ui: &mut egui::Ui,
@@ -299,6 +313,7 @@ pub fn show_advanced(
     ctx.data_mut(|d| d.insert_temp(id, view));
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn get_or_insert_context(
     ctx: &egui::Context,
     gl: &std::sync::Arc<egui_glow::glow::Context>,

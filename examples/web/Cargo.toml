@@ -1,5 +1,5 @@
 [package]
-name = "egui-3d-map-view"
+name = "web"
 version = "0.1.0"
 edition = "2024"
 
@@ -25,3 +25,4 @@ web-sys = { version = "0.3.70", features = [
   'HtmlAnchorElement',
 ] }
 js-sys = "0.3"
+egui-3d-map-view = {path = "../../"}
