@@ -29,7 +29,7 @@ impl App {
             three_d::Viewport::new_at_origo(512, 512),
             three_d::vec3(47702560.0, 0.0, -9691560.0),
             three_d::vec3(0.0, 0.0, 0.0),
-            three_d::vec3(0., 0., -1.),
+            three_d::vec3(0., 0., 1.),
             three_d::degrees(45.0),
             100.,        //0.1,
             1000000000., //1000.0,
@@ -82,7 +82,7 @@ impl eframe::App for App {
                 ui,
                 frame,
                 size,
-                Color32::TRANSPARENT,
+                Color32::BLACK,
                 1.0,
                 |viewport| {
                     self.camera.set_viewport(viewport);

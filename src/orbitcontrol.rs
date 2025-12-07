@@ -23,7 +23,7 @@ pub fn handle_events(
 
     if pointer_down {
         let delta = delta;
-        let speed = -0.01 
+        let speed = 0.01 
             * ((target.distance(camera.position) - min_distance) / (max_distance - min_distance));
         camera.rotate_around_with_fixed_up(target, speed * delta.x, speed * delta.y);
     }

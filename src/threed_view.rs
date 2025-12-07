@@ -1,3 +1,5 @@
+use three_d::HasContext;
+
 #[derive(Clone)]
 pub struct View {
     pub textures: Option<TexturesContainer>,
@@ -9,6 +11,126 @@ pub struct TexturesContainer {
     pub texture: three_d::Texture2D,
     pub depth_texture: three_d::DepthTexture2D,
     pub texture_id: egui::TextureId,
+    pub program: eframe::glow::NativeProgram,
+    pub vao: eframe::glow::NativeVertexArray,
+    pub vbo: eframe::glow::NativeBuffer,
+}
+
+fn create_program(gl: &egui_glow::glow::Context) -> eframe::glow::NativeProgram {
+    unsafe {
+        // Vertex shader
+        let vert_shader = gl
+            .create_shader(egui_glow::glow::VERTEX_SHADER)
+            .expect("Failed to create vertex shader");
+        gl.shader_source(
+            vert_shader,
+            r#"#version 330 core
+               layout (location = 0) in vec2 a_pos;
+
+               out vec2 v_TexCoords;
+
+               void main() {
+                   gl_Position = vec4(a_pos, 0.0, 1.0);
+                   v_TexCoords = a_pos * 0.5 + 0.5;
+               }
+            "#,
+        );
+        gl.compile_shader(vert_shader);
+        if !gl.get_shader_compile_status(vert_shader) {
+            panic!(
+                "Vertex shader error: {}",
+                gl.get_shader_info_log(vert_shader)
+            );
+        }
+
+        // Fragment shader
+        let frag_shader = gl
+            .create_shader(egui_glow::glow::FRAGMENT_SHADER)
+            .expect("Failed to create fragment shader");
+        gl.shader_source(
+            frag_shader,
+            r#"#version 330 core
+
+               uniform sampler2D u_Texture;
+
+               in vec2 v_TexCoords;
+               out vec4 FragColor;
+
+               void main() {
+                   // A reddish triangle
+                   FragColor = texture(u_Texture, v_TexCoords);
+               }
+            "#,
+        );
+        gl.compile_shader(frag_shader);
+        if !gl.get_shader_compile_status(frag_shader) {
+            panic!(
+                "Fragment shader error: {}",
+                gl.get_shader_info_log(frag_shader)
+            );
+        }
+
+        // Link program
+        let program: eframe::glow::NativeProgram =
+            gl.create_program().expect("Failed to create GL program");
+        gl.attach_shader(program, vert_shader);
+        gl.attach_shader(program, frag_shader);
+        gl.link_program(program);
+        if !gl.get_program_link_status(program) {
+            panic!("Program link error: {}", gl.get_program_info_log(program));
+        }
+
+        // Shaders can be deleted after linking
+        gl.delete_shader(vert_shader);
+        gl.delete_shader(frag_shader);
+
+        return program;
+    }
+}
+
+fn create_buffers(
+    gl: &egui_glow::glow::Context,
+) -> (eframe::glow::NativeVertexArray, eframe::glow::NativeBuffer) {
+    unsafe {
+        let vertices: [f32; 12] = [
+            -1., -1.,// left bottom
+            1., -1., // right bottom
+            -1., 1., // left top
+            1., -1., // right bottom
+            1., 1.,  // right top
+            -1., 1., // left top
+        ];
+
+        // Upload vertex data
+        let vao: eframe::glow::NativeVertexArray =
+            gl.create_vertex_array().expect("Failed to create VAO");
+        gl.bind_vertex_array(Some(vao));
+
+        let vbo: eframe::glow::NativeBuffer = gl.create_buffer().expect("Failed to create VBO");
+        gl.bind_buffer(eframe::glow::ARRAY_BUFFER, Some(vbo));
+
+        let bytes: &[u8] = std::slice::from_raw_parts(
+            vertices.as_ptr() as *const u8,
+            vertices.len() * std::mem::size_of::<f32>(),
+        );
+        gl.buffer_data_u8_slice(eframe::glow::ARRAY_BUFFER, bytes, eframe::glow::STATIC_DRAW);
+
+        // Configure vertex attribute 0 as vec2
+        gl.enable_vertex_attrib_array(0);
+        gl.vertex_attrib_pointer_f32(
+            0,
+            2, // vec2
+            eframe::glow::FLOAT,
+            false,
+            (2 * std::mem::size_of::<f32>()) as i32,
+            0,
+        );
+
+        gl.bind_vertex_array(None);
+        gl.bind_buffer(eframe::glow::ARRAY_BUFFER, None);
+
+        return (vao, vbo);
+    }
 }
 
 fn create_textures(
@@ -34,10 +156,16 @@ fn create_textures(
         three_d::Wrapping::ClampToEdge,
     );
     let texture_id = frame.register_native_glow_texture(texture.id());
+    let gl = frame.gl().unwrap().as_ref();
+    let program = create_program(gl);
+    let (vao, vbo) = create_buffers(gl);
     return TexturesContainer {
         texture,
         depth_texture,
         texture_id: texture_id,
+        program,
+        vao,
+        vbo,
     };
 }
 
@@ -91,14 +219,44 @@ impl View {
 
     pub fn show(&self, ui: &mut egui::Ui) {
         if let Some(tex) = &self.textures {
+            // let image = egui::Image::new(egui::load::SizedTexture::new(tex.texture_id, self.size))
+            //     .uv(egui::Rect::from_min_max(
+            //         egui::pos2(1.0, 0.0), // U axis reversed
+            //         egui::pos2(0.0, 1.0),
+            //     ));
 
-            let image = egui::Image::new(egui::load::SizedTexture::new(tex.texture_id, self.size))
-            .uv(egui::Rect::from_min_max(
-                egui::pos2(1.0, 0.0),  // U axis reversed
-                egui::pos2(0.0, 1.0),
-            ));
+            // ui.add(image);
 
-        ui.add(image);
+            let t = tex.clone();
+
+            let callback_fn =
+                egui_glow::CallbackFn::new(move |info: egui::PaintCallbackInfo, painter| unsafe {
+                    let gl = painter.gl();
+                    gl.bind_vertex_array(Some(t.vao));
+                    gl.bind_buffer(eframe::glow::ARRAY_BUFFER, Some(t.vbo));
+                    gl.enable_vertex_attrib_array(0);
+                    gl.use_program(Some(t.program));
+                    gl.bind_texture(eframe::glow::TEXTURE_2D, Some(t.texture.id()));
+
+                    gl.draw_arrays(eframe::glow::TRIANGLES, 0, 6);
+
+
+                    gl.bind_texture(eframe::glow::TEXTURE_2D, None);
+                    gl.disable_vertex_attrib_array(0);
+                    gl.bind_buffer(eframe::glow::ARRAY_BUFFER, None);
+                    gl.bind_vertex_array(None);
+                    gl.use_program(None);
+                });
+
+            let pos = ui.next_widget_position();
+            let rect = egui::Rect::from_two_pos(pos, pos + self.size);
+
+            let callback = egui::PaintCallback {
+                rect: rect,
+                callback: std::sync::Arc::new(callback_fn),
+            };
+
+            ui.painter().add(egui::Shape::Callback(callback));
         }
     }
 }
