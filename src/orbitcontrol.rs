@@ -17,14 +17,14 @@ pub fn handle_events(
     });
 
     if zoom_delta != 0. {
-        let speed = 0.01 * (target.distance(camera.position) - min_distance) + 0.001;
+        let speed = 0.01 * (target.distance(camera.position()) - min_distance) + 0.001;
         camera.zoom_towards(target, speed * zoom_delta, min_distance, max_distance);
     }
 
     if pointer_down {
         let delta = delta;
         let speed = 0.01 
-            * ((target.distance(camera.position) - min_distance) / (max_distance - min_distance));
+            * ((target.distance(camera.position()) - min_distance) / (max_distance - min_distance));
         camera.rotate_around_with_fixed_up(target, speed * delta.x, speed * delta.y);
     }
 }
