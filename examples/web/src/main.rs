@@ -17,11 +17,18 @@ fn main() {
             .dyn_into::<web_sys::HtmlCanvasElement>()
             .expect("the_canvas_id was not a HtmlCanvasElement");
 
+        let key = web_sys::window()
+            .and_then(|w| w.location().search().ok())
+            .and_then(|search| {
+                search.strip_prefix("?key=").map(|s| s.to_string())
+            })
+            .unwrap_or_default();
+
         let start_result = eframe::WebRunner::new()
             .start(
                 canvas,
                 web_options,
-                Box::new(|cc| Ok(Box::new(App::new(cc)))),
+                Box::new(move|cc| Ok(Box::new(App::new(cc, key)))),
             )
             .await;
 
@@ -56,7 +63,7 @@ struct App {
 }
 
 impl App {
-    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    fn new(cc: &eframe::CreationContext<'_>, key : String) -> Self {
         
         let context = three_d::Context::from_gl_context(cc.gl.as_ref().unwrap().clone()).unwrap();
         let camera = three_d::Camera::new_perspective(
@@ -71,11 +78,15 @@ impl App {
 
         let light: three_d::AmbientLight =
             three_d::AmbientLight::new(&context, 0.5, three_d::Srgba::WHITE);
+        let tile_cache = if key != "" {Some(egui_3d_map_view::maps::TileCache::new(
+                        &context,
+                        key.clone(),
+                    ))} else { None};
         Self {
-            tile_cache: None,
+            tile_cache,
             camera,
             light,
-            key: "".to_string(),
+            key,
             view : Default::default(), context,
         }
     }
