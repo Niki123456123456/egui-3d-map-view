@@ -10,15 +10,22 @@ pub fn handle_events(
     let mut pointer_down = false;
     let mut delta = egui::Vec2::ZERO;
     let mut zoom_delta = 0.;
+    let mut pinch_zoom = 0.;
     ctx.input(|i| {
         zoom_delta = i.smooth_scroll_delta.y;
         pointer_down = i.pointer.primary_down();
         delta = i.pointer.delta();
+        pinch_zoom = i.zoom_delta(); 
     });
 
     if zoom_delta != 0. {
         let speed = 0.01 * (target.distance(camera.position()) - min_distance) + 0.001;
         camera.zoom_towards(target, speed * zoom_delta, min_distance, max_distance);
+    }
+
+    if pinch_zoom != 1. {
+        let speed = 0.01 * (target.distance(camera.position()) - min_distance) + 0.001;
+        camera.zoom_towards(target, speed * (pinch_zoom - 1.), min_distance, max_distance);
     }
 
     if pointer_down {
