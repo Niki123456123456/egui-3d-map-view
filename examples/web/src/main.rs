@@ -59,12 +59,13 @@ struct App {
     light: three_d::AmbientLight,
     key: String,
     view : egui_3d_map_view::threed_view::View,
-    context: three_d::Context
+    context: three_d::Context,
+    settings_open : bool,
 }
 
 impl App {
     fn new(cc: &eframe::CreationContext<'_>, key : String) -> Self {
-        
+
         let context = three_d::Context::from_gl_context(cc.gl.as_ref().unwrap().clone()).unwrap();
         let camera = three_d::Camera::new_perspective(
             three_d::Viewport::new_at_origo(512, 512),
@@ -88,6 +89,7 @@ impl App {
             light,
             key,
             view : Default::default(), context,
+            settings_open : false,
         }
     }
 }
@@ -105,6 +107,9 @@ impl eframe::App for App {
             6_378_000.0 - 15_000.,
             50_000_000.0,
         );
+        if settings_open {
+
+        }
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label(format!("FPS: {:.1}", fps));

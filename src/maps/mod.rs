@@ -444,25 +444,48 @@ pub async fn get_content(
     doc: &gltf::Document,
     buffer_data: &Vec<gltf::buffer::Data>,
 ) -> TileContent {
-    let mut p: draco_gltf_rs::DecodedPrimitive = draco_gltf_rs::decode_draco(
-        &prim,
-        doc,
-        buffer_data,
-        &vec![
-            draco_gltf_rs::AttrInfo {
-                unique_id: 0,
-                dim: 3,
-                data_type: 9,
-            },
-            draco_gltf_rs::AttrInfo {
-                unique_id: 1,
-                dim: 2,
-                data_type: 9,
-            },
-        ],
-    )
-    .await
-    .unwrap();
+    // let mut p: draco_gltf_rs::DecodedPrimitive = draco_gltf_rs::decode_draco(
+    //     &prim,
+    //     doc,
+    //     buffer_data,
+    //     &vec![
+    //         draco_gltf_rs::AttrInfo {
+    //             unique_id: 0,
+    //             dim: 3,
+    //             data_type: 9,
+    //         },
+    //         draco_gltf_rs::AttrInfo {
+    //             unique_id: 1,
+    //             dim: 2,
+    //             data_type: 9,
+    //         },
+    //     ],
+    // )
+    // .await
+    // .unwrap();
+
+    // let view = prim.indices().unwrap().view().unwrap();
+    // let indices_bytes =
+    //     &buffer_data[view.buffer().index()][view.offset()..(view.offset() + view.length())];
+    // let indices: Vec<_> = indices_bytes
+    //     .chunks_exact(4)
+    //     .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
+    //     .collect();
+
+    let reader = prim.reader(|buffer| Some(&buffer_data[buffer.index()]));
+    let indices: Vec<_>  =  reader.read_indices().expect("no indices found").into_u32().collect();
+    let positions: Vec<_> = reader
+        .read_positions()
+        .expect("Primitive has no POSITION attribute")
+        .map(|v| three_d::vec3(v[0], v[1], v[2]))
+        .collect();
+   let texcoords: Vec<_> = reader
+        .read_tex_coords(0)
+        .map(|tc| {
+            // Automatically converts normalized ints to f32
+            tc.into_f32().map(|uv| three_d::vec2(uv[0], uv[1])).collect()
+        })
+        .unwrap_or_default();
 
     let m = glam::Mat4::from_cols_array_2d(&[
         [1.0, 0.0, 0.0, 0.0],
@@ -473,23 +496,9 @@ pub async fn get_content(
     let m_inverse = m.inverse();
 
     let mut mesh = three_d::CpuMesh::default();
-    mesh.indices = three_d::Indices::U32(p.indices);
-    mesh.positions = three_d::Positions::F32(
-        p.positions
-            .unwrap()
-            .iter()
-            // .map(|v| m * mat * glam::vec4(v[0], v[1], v[2], 1.))
-            .map(|v| three_d::vec3(v[0], v[1], v[2]))
-            .collect(),
-    );
-    mesh.uvs = Some(
-        p.texcoords
-            .get_mut(&0)
-            .unwrap()
-            .iter()
-            .map(|v| three_d::vec2(v[0], v[1]))
-            .collect(),
-    );
+    mesh.indices = three_d::Indices::U32(indices);
+    mesh.positions = three_d::Positions::F32(positions);
+    mesh.uvs = Some(texcoords);
 
     let mut texture = three_d::CpuTexture::default();
     texture.width = image.width;

@@ -24,7 +24,10 @@ struct App {
 
 impl App {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let context = egui_3d_map_view::threed_view::get_or_insert_context(&cc.egui_ctx, cc.gl.as_ref().unwrap());
+        let context = egui_3d_map_view::threed_view::get_or_insert_context(
+            &cc.egui_ctx,
+            cc.gl.as_ref().unwrap(),
+        );
         let camera = three_d::Camera::new_perspective(
             three_d::Viewport::new_at_origo(512, 512),
             three_d::vec3(47702560.0, 0.0, -9691560.0),
@@ -51,7 +54,8 @@ impl eframe::App for App {
         let dt = ctx.input(|i| i.stable_dt);
         let fps = if dt > 0. { 1. / dt } else { 0. };
 
-        let context = egui_3d_map_view::threed_view::get_or_insert_context(ctx, frame.gl().unwrap());
+        let context =
+            egui_3d_map_view::threed_view::get_or_insert_context(ctx, frame.gl().unwrap());
 
         let target = self.camera.target();
         egui_3d_map_view::orbitcontrol::handle_events(

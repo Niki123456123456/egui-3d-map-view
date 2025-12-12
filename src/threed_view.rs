@@ -18,28 +18,62 @@ pub struct TexturesContainer {
 
 fn create_program(gl: &egui_glow::glow::Context) -> three_d::context::Program {
     unsafe {
+        let vertex_shader_source = r#"
+        precision highp float;
+        precision highp int;
+        precision highp sampler2DArray;
+        precision highp sampler3D;
+
+           layout (location = 0) in vec2 a_pos;
+
+           out vec2 v_TexCoords;
+
+           void main() {
+               gl_Position = vec4(a_pos, 0.0, 1.0);
+               v_TexCoords = a_pos * 0.5 + 0.5;
+           }
+        "#;
+        let fragment_shader_source = r#"
+        precision highp float;
+        precision highp int;
+        precision highp sampler2DArray;
+        precision highp sampler3D;
+
+           uniform sampler2D u_Texture;
+
+           in vec2 v_TexCoords;
+           out vec4 FragColor;
+
+           void main() {
+               // A reddish triangle
+               FragColor = texture(u_Texture, v_TexCoords);
+           }
+        "#;
+
+        let header: &str = if gl.version().is_embedded {
+            "#version 300 es
+                            #ifdef GL_FRAGMENT_PRECISION_HIGH
+                                precision highp float;
+                                precision highp int;
+                                precision highp sampler2DArray;
+                                precision highp sampler3D;
+                            #else
+                                precision mediump float;
+                                precision mediump int;
+                                precision mediump sampler2DArray;
+                                precision mediump sampler3D;
+                            #endif\n"
+        } else {
+            "#version 330 core\n"
+        };
+        let vertex_shader_source = format!("{}{}", header, vertex_shader_source);
+        let fragment_shader_source = format!("{}{}", header, fragment_shader_source);
+
         // Vertex shader
         let vert_shader = gl
             .create_shader(egui_glow::glow::VERTEX_SHADER)
             .expect("Failed to create vertex shader");
-        gl.shader_source(
-            vert_shader,
-            r#"#version 300 es
-            precision highp float;
-            precision highp int;
-            precision highp sampler2DArray;
-            precision highp sampler3D;
-
-               layout (location = 0) in vec2 a_pos;
-
-               out vec2 v_TexCoords;
-
-               void main() {
-                   gl_Position = vec4(a_pos, 0.0, 1.0);
-                   v_TexCoords = a_pos * 0.5 + 0.5;
-               }
-            "#,
-        );
+        gl.shader_source(vert_shader, &vertex_shader_source);
         gl.compile_shader(vert_shader);
         if !gl.get_shader_compile_status(vert_shader) {
             panic!(
@@ -52,25 +86,7 @@ fn create_program(gl: &egui_glow::glow::Context) -> three_d::context::Program {
         let frag_shader = gl
             .create_shader(egui_glow::glow::FRAGMENT_SHADER)
             .expect("Failed to create fragment shader");
-        gl.shader_source(
-            frag_shader,
-            r#"#version 300 es
-            precision highp float;
-            precision highp int;
-            precision highp sampler2DArray;
-            precision highp sampler3D;
-
-               uniform sampler2D u_Texture;
-
-               in vec2 v_TexCoords;
-               out vec4 FragColor;
-
-               void main() {
-                   // A reddish triangle
-                   FragColor = texture(u_Texture, v_TexCoords);
-               }
-            "#,
-        );
+        gl.shader_source(frag_shader, &fragment_shader_source);
         gl.compile_shader(frag_shader);
         if !gl.get_shader_compile_status(frag_shader) {
             panic!(
@@ -80,8 +96,7 @@ fn create_program(gl: &egui_glow::glow::Context) -> three_d::context::Program {
         }
 
         // Link program
-        let program =
-            gl.create_program().expect("Failed to create GL program");
+        let program = gl.create_program().expect("Failed to create GL program");
         gl.attach_shader(program, vert_shader);
         gl.attach_shader(program, frag_shader);
         gl.link_program(program);
@@ -102,17 +117,16 @@ fn create_buffers(
 ) -> (three_d::context::VertexArray, three_d::context::Buffer) {
     unsafe {
         let vertices: [f32; 12] = [
-            -1., -1.,// left bottom
+            -1., -1., // left bottom
             1., -1., // right bottom
             -1., 1., // left top
             1., -1., // right bottom
-            1., 1.,  // right top
+            1., 1., // right top
             -1., 1., // left top
         ];
 
         // Upload vertex data
-        let vao =
-            gl.create_vertex_array().expect("Failed to create VAO");
+        let vao = gl.create_vertex_array().expect("Failed to create VAO");
         gl.bind_vertex_array(Some(vao));
 
         let vbo = gl.create_buffer().expect("Failed to create VBO");
@@ -122,7 +136,11 @@ fn create_buffers(
             vertices.as_ptr() as *const u8,
             vertices.len() * std::mem::size_of::<f32>(),
         );
-        gl.buffer_data_u8_slice(three_d::context::ARRAY_BUFFER, bytes, three_d::context::STATIC_DRAW);
+        gl.buffer_data_u8_slice(
+            three_d::context::ARRAY_BUFFER,
+            bytes,
+            three_d::context::STATIC_DRAW,
+        );
 
         // Configure vertex attribute 0 as vec2
         gl.enable_vertex_attrib_array(0);
@@ -251,7 +269,6 @@ impl View {
                     gl.bind_texture(three_d::context::TEXTURE_2D, Some(t));
 
                     gl.draw_arrays(three_d::context::TRIANGLES, 0, 6);
-
 
                     gl.bind_texture(three_d::context::TEXTURE_2D, None);
                     gl.disable_vertex_attrib_array(0);
