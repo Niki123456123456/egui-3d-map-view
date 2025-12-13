@@ -120,7 +120,7 @@ impl eframe::App for App {
                         self.camera.set_viewport(viewport);
                         if let Some(tile_cache) = &mut self.tile_cache {
                             tile_cache.load(&self.context);
-                            tile_cache.render(&self.camera, &[&self.light]);
+                            tile_cache.render(&self.camera, &[&self.light], self.show_bounding_boxes);
                         }
                     },
                 );
@@ -133,9 +133,6 @@ impl eframe::App for App {
                 let dt = ctx.input(|i| i.stable_dt);
                 let fps = if dt > 0. { 1. / dt } else { 0. };
                 ui.label(format!("FPS: {:.1}", fps));
-
-                let pan_delta = ctx.input(|i| i.zoom_delta());
-                 ui.label(format!("pan_delta: {:.3}", pan_delta));
 
                 ui.checkbox(&mut self.show_bounding_boxes, "show bounding boxes");
                 self.key_edit(ui);

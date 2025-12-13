@@ -188,7 +188,7 @@ impl TileCache {
         }
     }
 
-    pub fn render(&mut self, camera: &three_d::Camera, lights: &[&dyn three_d::Light]) -> usize {
+    pub fn render(&mut self, camera: &three_d::Camera, lights: &[&dyn three_d::Light], show_bounding_boxes: bool,) -> usize {
         if let Some(client) = self.client.ready() {
             let position = three_d_vec3_to_glam_d(&camera.position());
             let frustum = Frustum::from_view_proj_with_origin_far(
@@ -221,7 +221,7 @@ impl TileCache {
                     &mut counter,
                     &client,
                     &mut self.node_promises,
-                    20,
+                    20, show_bounding_boxes
                 );
             }
             return counter;
@@ -241,6 +241,7 @@ pub fn render_tile(
     rest_client: &Arc<tiles::RestClient>,
     node_promises: &mut Vec<poll_promise::Promise<(String, Node)>>,
     max_level: usize,
+    show_bounding_boxes: bool,
 ) {
     let mut childern = vec![];
     let mut meet_sse = false;
@@ -273,14 +274,17 @@ pub fn render_tile(
                     }
                 }
                 *counter += 1;
-                m.texture = None;
-                if is_visible {
-                    m.color = three_d::Srgba::WHITE;
-                } else {
-                    m.color = three_d::Srgba::RED;
-                }
-                if is_visible {
-                    t.edges.render_with_material(&m, camera, lights);
+
+                if show_bounding_boxes {
+                    m.texture = None;
+                    if is_visible {
+                        m.color = three_d::Srgba::WHITE;
+                    } else {
+                        m.color = three_d::Srgba::RED;
+                    }
+                    if is_visible {
+                        t.edges.render_with_material(&m, camera, lights);
+                    }
                 }
             }
         }
@@ -297,6 +301,7 @@ pub fn render_tile(
             rest_client,
             node_promises,
             max_level - 1,
+            show_bounding_boxes,
         );
     }
 }
@@ -473,17 +478,23 @@ pub async fn get_content(
     //     .collect();
 
     let reader = prim.reader(|buffer| Some(&buffer_data[buffer.index()]));
-    let indices: Vec<_>  =  reader.read_indices().expect("no indices found").into_u32().collect();
+    let indices: Vec<_> = reader
+        .read_indices()
+        .expect("no indices found")
+        .into_u32()
+        .collect();
     let positions: Vec<_> = reader
         .read_positions()
         .expect("Primitive has no POSITION attribute")
         .map(|v| three_d::vec3(v[0], v[1], v[2]))
         .collect();
-   let texcoords: Vec<_> = reader
+    let texcoords: Vec<_> = reader
         .read_tex_coords(0)
         .map(|tc| {
             // Automatically converts normalized ints to f32
-            tc.into_f32().map(|uv| three_d::vec2(uv[0], uv[1])).collect()
+            tc.into_f32()
+                .map(|uv| three_d::vec2(uv[0], uv[1]))
+                .collect()
         })
         .unwrap_or_default();
 
