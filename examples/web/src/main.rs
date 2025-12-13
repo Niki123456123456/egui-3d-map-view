@@ -45,6 +45,7 @@ fn main() {
     });
 }
 
+
 use eframe::egui;
 use egui::Color32;
 
@@ -57,6 +58,9 @@ struct App {
     context: three_d::Context,
     settings_open: bool,
     show_bounding_boxes: bool,
+    search_promise: Option<poll_promise::Promise<Vec<egui_3d_map_view::search::Place>>>,
+    search: String,
+    show_search: bool,
 }
 
 impl App {
@@ -91,6 +95,9 @@ impl App {
             context,
             settings_open: false,
             show_bounding_boxes: false,
+            search_promise: None,
+            search: Default::default(),
+            show_search: false,
         }
     }
 
@@ -115,6 +122,8 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        let mut search_rect = egui::Rect::ZERO;
+
         egui::CentralPanel::default()
             .frame(egui::Frame::default().inner_margin(egui::Margin::ZERO))
             .show(ctx, |ui| {
@@ -122,7 +131,33 @@ impl eframe::App for App {
                     egui::Sides::new().show(
                         ui,
                         |ui| {
-                            ui.horizontal(|ui| {});
+                            ui.horizontal(|ui| {
+                                ui.label("🔍");
+                                let resp = egui::TextEdit::singleline(&mut self.search)
+                                    .return_key(Some(egui::KeyboardShortcut::new(
+                                        egui::Modifiers::NONE,
+                                        egui::Key::Enter,
+                                    )))
+                                    .hint_text("search")
+                                    .return_key(Some(egui::KeyboardShortcut::new(
+                                        egui::Modifiers::NONE,
+                                        egui::Key::Enter,
+                                    )))
+                                    .show(ui);
+                                search_rect = resp.response.rect;
+                                if resp.response.lost_focus()
+                                    && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                                {
+                                    self.search_promise =
+                                        Some(egui_3d_map_view::search::search(self.search.clone()));
+                                    self.show_search = true;
+                                }
+                                if ui.button("🔍").clicked() {
+                                    self.search_promise =
+                                        Some(egui_3d_map_view::search::search(self.search.clone()));
+                                    self.show_search = true;
+                                }
+                            });
                         },
                         |ui| {
                             if ui.button("⚙").clicked() {
@@ -156,7 +191,7 @@ impl eframe::App for App {
                         frame,
                         &self.context,
                         rect.size(),
-                        Color32::BLACK,
+                        Color32::TRANSPARENT,
                         1.0,
                         |viewport| {
                             self.camera.set_viewport(viewport);
@@ -173,6 +208,50 @@ impl eframe::App for App {
                     self.view.show(ui);
                 }
             });
+
+        if self.show_search {
+            if let Some(search_promise) = &self.search_promise {
+                if let Some(places) = search_promise.ready() {
+                    egui::Window::new("search_results")
+                        .frame(egui::Frame::central_panel(&ctx.style()).corner_radius(
+                            egui::CornerRadius {
+                                nw: 0,
+                                ne: 0,
+                                sw: 8,
+                                se: 8,
+                            },
+                        ))
+                        .fixed_pos(search_rect.left_bottom())
+                        .title_bar(false)
+                        .resizable(false)
+                        .show(ctx, |ui| {
+                            for place in places {
+                                ui.horizontal(|ui| {
+                                    ui.label(&place.name);
+                                    if ui.button("visit").clicked() {
+                                        let coodinates = egui_3d_map_view::maps::latlon_to_xyz(
+                                            place.lat, place.lon, 1000.,
+                                        );
+                                        self.camera = three_d::Camera::new_perspective(
+                                            three_d::Viewport::new_at_origo(512, 512),
+                                            egui_3d_map_view::maps::glam_d_vec3_to_three_d(
+                                                &coodinates,
+                                            ),
+                                            three_d::vec3(0.0, 0.0, 0.0),
+                                            three_d::vec3(0.0, 0.0, 1.0),
+                                            three_d::degrees(45.0),
+                                            100.,        //0.1,
+                                            1000000000., //1000.0,
+                                        );
+                                        self.show_search = false;
+                                    }
+                                });
+                                ui.label(format!("{:.1}° {:.1}°", place.lat, place.lon));
+                            }
+                        });
+                }
+            }
+        }
 
         if self.settings_open {
             egui::Window::new("⚙ settings").show(ctx, |ui| {
