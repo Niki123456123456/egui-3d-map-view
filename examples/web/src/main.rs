@@ -1,7 +1,5 @@
-
-
 fn main() {
-   use eframe::wasm_bindgen::JsCast as _;
+    use eframe::wasm_bindgen::JsCast as _;
 
     let web_options = eframe::WebOptions::default();
 
@@ -19,16 +17,14 @@ fn main() {
 
         let key = web_sys::window()
             .and_then(|w| w.location().search().ok())
-            .and_then(|search| {
-                search.strip_prefix("?key=").map(|s| s.to_string())
-            })
+            .and_then(|search| search.strip_prefix("?key=").map(|s| s.to_string()))
             .unwrap_or_default();
 
         let start_result = eframe::WebRunner::new()
             .start(
                 canvas,
                 web_options,
-                Box::new(move|cc| Ok(Box::new(App::new(cc, key)))),
+                Box::new(move |cc| Ok(Box::new(App::new(cc, key)))),
             )
             .await;
 
@@ -127,43 +123,52 @@ impl eframe::App for App {
             6_378_000.0 - 15_000.,
             50_000_000.0,
         );
-        egui::CentralPanel::default().show(ctx, |ui| {
-            egui::Sides::new().show(
-                ui,
-                |ui| {
-                    ui.horizontal(|ui| {});
-                },
-                |ui| {
-                    if ui.button("⚙").clicked() {
-                        self.settings_open = !self.settings_open;
+        egui::CentralPanel::default()
+            .frame(egui::Frame::default().inner_margin(egui::Margin::ZERO))
+            .show(ctx, |ui| {
+                egui::Frame::central_panel(ui.style()).show(ui, |ui| {
+                    egui::Sides::new().show(
+                        ui,
+                        |ui| {
+                            ui.horizontal(|ui| {});
+                        },
+                        |ui| {
+                            if ui.button("⚙").clicked() {
+                                self.settings_open = !self.settings_open;
+                            }
+                        },
+                    );
+                    if self.tile_cache.is_none() {
+                        ui.vertical(|ui| {
+                            ui.heading("Please insert your google api key");
+                            self.key_edit(ui);
+                        });
                     }
-                },
-            );
-            let size = ui.available_size_before_wrap();
-
-            if self.tile_cache.is_none() {
-                ui.vertical(|ui| {
-                    ui.heading("Please insert your google api key");
-                    self.key_edit(ui);
                 });
-            } else {
-                self.view.render(
-                    frame,
-                    &self.context,
-                    size,
-                    Color32::BLACK,
-                    1.0,
-                    |viewport| {
-                        self.camera.set_viewport(viewport);
-                        if let Some(tile_cache) = &mut self.tile_cache {
-                            tile_cache.load(&self.context);
-                            tile_cache.render(&self.camera, &[&self.light], self.show_bounding_boxes);
-                        }
-                    },
-                );
-                self.view.show(ui);
-            }
-        });
+
+                if !self.tile_cache.is_none() {
+                    let size = ui.available_size();
+                    self.view.render(
+                        frame,
+                        &self.context,
+                        size,
+                        Color32::BLACK,
+                        1.0,
+                        |viewport| {
+                            self.camera.set_viewport(viewport);
+                            if let Some(tile_cache) = &mut self.tile_cache {
+                                tile_cache.load(&self.context);
+                                tile_cache.render(
+                                    &self.camera,
+                                    &[&self.light],
+                                    self.show_bounding_boxes,
+                                );
+                            }
+                        },
+                    );
+                    self.view.show(ui);
+                }
+            });
 
         if self.settings_open {
             egui::Window::new("⚙ settings").show(ctx, |ui| {
