@@ -92,7 +92,7 @@ impl eframe::App for App {
                     self.camera.set_viewport(viewport);
                     if let Some(tile_cache) = &mut self.tile_cache {
                         tile_cache.load(&context);
-                        tile_cache.render(&self.camera, &[&self.light]);
+                        tile_cache.render(&self.camera, &[&self.light], false);
                     }
                 },
             );
