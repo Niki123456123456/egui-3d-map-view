@@ -188,7 +188,12 @@ impl TileCache {
         }
     }
 
-    pub fn render(&mut self, camera: &three_d::Camera, lights: &[&dyn three_d::Light], show_bounding_boxes: bool,) -> usize {
+    pub fn render(
+        &mut self,
+        camera: &three_d::Camera,
+        lights: &[&dyn three_d::Light],
+        show_bounding_boxes: bool,
+    ) -> usize {
         if let Some(client) = self.client.ready() {
             let position = three_d_vec3_to_glam_d(&camera.position());
             let frustum = Frustum::from_view_proj_with_origin_far(
@@ -221,7 +226,8 @@ impl TileCache {
                     &mut counter,
                     &client,
                     &mut self.node_promises,
-                    20, show_bounding_boxes
+                    20,
+                    show_bounding_boxes,
                 );
             }
             return counter;
@@ -256,26 +262,32 @@ pub fn render_tile(
             if !t.children.is_empty() && !meet_sse && max_level > 0 {
                 childern = t.children.clone();
             } else {
+                // load content
                 if let TileContentState::None = &t.content {
                     t.content = TileContentState::Loading(get_contents(id.clone(), rest_client));
                 }
+
+                // load children
                 if !meet_sse && !t.child_options.is_empty() && max_level > 0 {
                     for c in t.child_options.iter() {
                         node_promises.push(get_node(c.clone(), id.clone(), rest_client));
                     }
                     t.child_options.clear();
                 }
-                let mut m = material.clone();
+
+                // render
                 if let TileContentState::Ready(contents) = &t.content {
                     let mut m = material.clone();
                     for c in contents {
                         m.texture = Some(c.texture_gpu.clone());
                         three_d::Geometry::render_with_material(&c.mesh_gpu, &m, camera, lights);
                     }
+                    *counter += 1;
                 }
-                *counter += 1;
 
+                // show bounding box
                 if show_bounding_boxes {
+                    let mut m = material.clone();
                     m.texture = None;
                     if is_visible {
                         m.color = three_d::Srgba::WHITE;
