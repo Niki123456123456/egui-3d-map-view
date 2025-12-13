@@ -7,6 +7,7 @@ edition = "2024"
 eframe = "0.33.2"
 egui = "0.33.2"
 egui_glow = "0.33.2"
+egui_ltreeview = "0.6.0"
 glam = "0.30.3"
 three-d = { git = "https://github.com/Niki123456123456/three-d", branch = "program_draw_more_than_triangles" }
 draco-gltf-rs = { git = "https://github.com/Niki123456123456/draco-gltf-rs.git" }

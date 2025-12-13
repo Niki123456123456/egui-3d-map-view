@@ -94,6 +94,28 @@ pub struct TileCache {
     pub has_load_root: bool,
 }
 
+pub fn get_view_state(camera: &three_d::Camera) -> ViewState {
+    let position = three_d_vec3_to_glam_d(&camera.position());
+    let frustum = Frustum::from_view_proj_with_origin_far(
+        three_d_to_glam(&(camera.projection() * camera.view())),
+        position,
+    );
+    let s = ViewState {
+        frustum,
+        planes: extract_planes(&three_d_to_glam(&(camera.projection() * camera.view()))),
+        position: three_d_vec3_to_glam_d(&camera.position()),
+        viewport_size: glam::dvec2(
+            camera.viewport().width as f64,
+            camera.viewport().height as f64,
+        ),
+        culling_volume: CullingVolume::new_matrix(three_d_to_glam(
+            &(camera.projection() * camera.view()),
+        )),
+        projection_matrix: three_d_to_glam(&camera.projection()),
+    };
+    return s;
+}
+
 impl TileCache {
     pub fn new(ctx3d: &three_d::Context, key: String) -> Self {
         let mut m = three_d::ColorMaterial::new(
@@ -195,25 +217,7 @@ impl TileCache {
         show_bounding_boxes: bool,
     ) -> usize {
         if let Some(client) = self.client.ready() {
-            let position = three_d_vec3_to_glam_d(&camera.position());
-            let frustum = Frustum::from_view_proj_with_origin_far(
-                three_d_to_glam(&(camera.projection() * camera.view())),
-                position,
-            );
-            let s = ViewState {
-                frustum,
-                planes: extract_planes(&three_d_to_glam(&(camera.projection() * camera.view()))),
-                position: three_d_vec3_to_glam_d(&camera.position()),
-                viewport_size: glam::dvec2(
-                    camera.viewport().width as f64,
-                    camera.viewport().height as f64,
-                ),
-                culling_volume: CullingVolume::new_matrix(three_d_to_glam(
-                    &(camera.projection() * camera.view()),
-                )),
-                projection_matrix: three_d_to_glam(&camera.projection()),
-            };
-
+            let s = get_view_state(camera);
             let mut counter = 0;
             for r in self.roots.iter() {
                 render_tile(
@@ -248,12 +252,14 @@ pub fn render_tile(
     node_promises: &mut Vec<poll_promise::Promise<(String, Node)>>,
     max_level: usize,
     show_bounding_boxes: bool,
-) {
+) -> (bool, bool) {
     let mut childern = vec![];
     let mut meet_sse = false;
+    let mut has_rendered = false;
+    let mut is_visible = false;
 
     if let Some(t) = cache.get_mut(id) {
-        let is_visible = t.bv.is_visible(s.position) && t.bv.intersects_frustum(&s.frustum);
+        is_visible = t.bv.is_visible(s.position) && t.bv.intersects_frustum(&s.frustum);
 
         if is_visible {
             let meet_sse = s.does_tile_meet_sse(t);
@@ -283,6 +289,7 @@ pub fn render_tile(
                         three_d::Geometry::render_with_material(&c.mesh_gpu, &m, camera, lights);
                     }
                     *counter += 1;
+                    has_rendered = true;
                 }
 
                 // show bounding box
@@ -301,21 +308,44 @@ pub fn render_tile(
             }
         }
     }
-    for id in childern.iter() {
-        render_tile(
-            id,
-            cache,
-            s,
-            material,
-            camera,
-            lights,
-            counter,
-            rest_client,
-            node_promises,
-            max_level - 1,
-            show_bounding_boxes,
-        );
+
+    if !childern.is_empty() {
+        has_rendered = true;
+        for id in childern.iter() {
+            let (child_visible, child_rendered) = render_tile(
+                id,
+                cache,
+                s,
+                material,
+                camera,
+                lights,
+                counter,
+                rest_client,
+                node_promises,
+                max_level - 1,
+                show_bounding_boxes,
+            );
+            if child_visible && !child_rendered {
+                has_rendered = false;
+            }
+        }
     }
+
+    if !has_rendered {
+        if let Some(t) = cache.get_mut(id) {
+            if let TileContentState::Ready(contents) = &t.content {
+                let mut m = material.clone();
+                for c in contents {
+                    m.texture = Some(c.texture_gpu.clone());
+                    three_d::Geometry::render_with_material(&c.mesh_gpu, &m, camera, lights);
+                }
+                *counter += 1;
+                has_rendered = true;
+            }
+        }
+    }
+
+    return (is_visible, has_rendered);
 }
 
 pub struct Tile {
@@ -327,6 +357,9 @@ pub struct Tile {
     pub parent: Option<String>,
     pub children: Vec<String>,
     pub child_options: Vec<String>,
+
+    pub is_visible: bool,
+    pub meets_sse: bool,
 }
 
 impl Tile {
@@ -394,6 +427,8 @@ impl Tile {
                     parent: parent.cloned(),
                     children: vec![],
                     child_options: vec![],
+                    is_visible: false,
+                    meets_sse: false,
                 };
                 return Some((content.uri.clone(), tile));
             }
