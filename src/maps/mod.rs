@@ -480,8 +480,10 @@ pub fn get_contents(path: String, c: &Arc<RestClient>) -> poll_promise::Promise<
 
         let mut contents = vec![];
 
-        for (i, prim) in source_mesh.primitives().enumerate() {
-            contents.push(get_content(&prim, mat, &images[i], &doc, &buffer_data).await);
+        if images.len() >= source_mesh.primitives().len() {
+            for (i, prim) in source_mesh.primitives().enumerate() {
+                contents.push(get_content(&prim, mat, &images[i], &doc, &buffer_data).await);
+            }
         }
 
         sender.send(contents);
