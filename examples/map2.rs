@@ -134,6 +134,9 @@ impl eframe::App for App {
                 let fps = if dt > 0. { 1. / dt } else { 0. };
                 ui.label(format!("FPS: {:.1}", fps));
 
+                let pan_delta = ctx.input(|i| i.zoom_delta());
+                 ui.label(format!("pan_delta: {:.3}", pan_delta));
+
                 ui.checkbox(&mut self.show_bounding_boxes, "show bounding boxes");
                 self.key_edit(ui);
             });

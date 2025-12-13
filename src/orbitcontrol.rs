@@ -24,7 +24,7 @@ pub fn handle_events(
     }
 
     if pinch_zoom != 1. {
-        let speed = 0.01 * (target.distance(camera.position()) - min_distance) + 0.001;
+        let speed = (target.distance(camera.position()) - min_distance) + 0.001;
         camera.zoom_towards(target, speed * (pinch_zoom - 1.), min_distance, max_distance);
     }
 
