@@ -4,3 +4,4 @@ pub mod maps;
 pub mod http;
 pub mod lines;
 pub mod search;
+pub mod gpx;

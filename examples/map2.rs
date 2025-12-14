@@ -27,6 +27,9 @@ struct App {
     search_promise: Option<poll_promise::Promise<Vec<egui_3d_map_view::search::Place>>>,
     search: String,
     show_search: bool,
+    gpx_promise: Option<poll_promise::Promise<egui_3d_map_view::gpx::GpxRoute>>,
+    gpx_routes: Vec<egui_3d_map_view::gpx::GpxRouteGPU>,
+    m: three_d::ColorMaterial,
 }
 
 impl App {
@@ -52,6 +55,14 @@ impl App {
         } else {
             None
         };
+
+         let  m= three_d::ColorMaterial::new(
+            &context,
+            &three_d::CpuMaterial {
+                albedo: three_d::Srgba::RED,
+                ..Default::default()
+            },
+        );
         Self {
             tile_cache,
             camera,
@@ -64,6 +75,9 @@ impl App {
             search_promise: None,
             search: Default::default(),
             show_search: false,
+            gpx_promise: None,
+            gpx_routes: vec![],
+            m
         }
     }
 
@@ -123,6 +137,10 @@ impl eframe::App for App {
                                         Some(egui_3d_map_view::search::search(self.search.clone()));
                                     self.show_search = true;
                                 }
+
+                                if ui.button("upload gpx").clicked() {
+                                    self.gpx_promise = Some(egui_3d_map_view::gpx::open());
+                                }
                             });
                         },
                         |ui| {
@@ -168,6 +186,9 @@ impl eframe::App for App {
                                     &[&self.light],
                                     self.show_bounding_boxes,
                                 );
+                            }
+                            for route in self.gpx_routes.iter() {
+                                 three_d::Geometry::render_with_material(&route.mesh, &self.m, &self.camera, &[&self.light]);
                             }
                         },
                     );
@@ -219,6 +240,16 @@ impl eframe::App for App {
             }
         }
 
+        if let Some(gpx_promise) = &self.gpx_promise {
+            if let Some(route) = gpx_promise.ready() {
+                self.gpx_routes
+                    .push(egui_3d_map_view::gpx::GpxRouteGPU::new(
+                        route.clone(),
+                        &self.context,
+                    ));
+                self.gpx_promise = None;
+            }
+        }
         if self.settings_open {
             egui::Window::new("⚙ settings").show(ctx, |ui| {
                 let dt = ctx.input(|i| i.stable_dt);

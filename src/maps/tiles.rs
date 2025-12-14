@@ -1,6 +1,4 @@
 use glam::{DMat4, DVec3, DVec4};
-use gltf::json::extensions::camera;
-use three_d::InnerSpace;
 
 #[derive(Debug, Default, Clone)]
 pub struct BoundingVolume {
