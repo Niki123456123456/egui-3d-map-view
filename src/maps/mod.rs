@@ -5,68 +5,15 @@ use three_d::Geometry;
 mod tiles;
 pub use tiles::*;
 
-pub fn glam_to_three_d(mat: &glam::Mat4) -> three_d::Mat4 {
-    let cols = mat.to_cols_array();
-    three_d::Mat4::new(
-        cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7], cols[8], cols[9],
-        cols[10], cols[11], cols[12], cols[13], cols[14], cols[15],
-    )
-}
+mod convert;
+pub use convert::*;
 
-pub fn dglam_to_three_d(mat: &glam::DMat4) -> three_d::Mat4 {
-    let cols = mat.to_cols_array();
-    three_d::Mat4::new(
-        cols[0] as f32,
-        cols[1] as f32,
-        cols[2] as f32,
-        cols[3] as f32,
-        cols[4] as f32,
-        cols[5] as f32,
-        cols[6] as f32,
-        cols[7] as f32,
-        cols[8] as f32,
-        cols[9] as f32,
-        cols[10] as f32,
-        cols[11] as f32,
-        cols[12] as f32,
-        cols[13] as f32,
-        cols[14] as f32,
-        cols[15] as f32,
-    )
-}
+mod view_state;
+pub use view_state::*;
 
-pub fn three_d_to_glam(mat: &three_d::Mat4) -> glam::DMat4 {
-    glam::DMat4::from_cols_array(&[
-        mat[0][0] as f64,
-        mat[0][1] as f64,
-        mat[0][2] as f64,
-        mat[0][3] as f64,
-        mat[1][0] as f64,
-        mat[1][1] as f64,
-        mat[1][2] as f64,
-        mat[1][3] as f64,
-        mat[2][0] as f64,
-        mat[2][1] as f64,
-        mat[2][2] as f64,
-        mat[2][3] as f64,
-        mat[3][0] as f64,
-        mat[3][1] as f64,
-        mat[3][2] as f64,
-        mat[3][3] as f64,
-    ])
-}
+mod obb;
+pub use obb::*;
 
-pub fn three_d_vec3_to_glam_d(vec: &three_d::Vec3) -> glam::DVec3 {
-    glam::DVec3::new(vec.x as f64, vec.y as f64, vec.z as f64)
-}
-
-pub fn three_d_vec3_to_glam(vec: &three_d::Vec3) -> glam::Vec3 {
-    glam::Vec3::new(vec.x, vec.y, vec.z)
-}
-
-pub fn glam_d_vec3_to_three_d(vec: &glam::DVec3) -> three_d::Vec3 {
-    three_d::Vec3::new(vec.x as f32, vec.y as f32, vec.z as f32)
-}
 
 pub struct TileContent {
     mesh: three_d::CpuMesh,
@@ -92,28 +39,6 @@ pub struct TileCache {
     pub node_promises: Vec<poll_promise::Promise<(String, Node)>>,
     pub material: three_d::ColorMaterial,
     pub has_load_root: bool,
-}
-
-pub fn get_view_state(camera: &three_d::Camera) -> ViewState {
-    let position = three_d_vec3_to_glam_d(&camera.position());
-    let frustum = Frustum::from_view_proj_with_origin_far(
-        three_d_to_glam(&(camera.projection() * camera.view())),
-        position,
-    );
-    let s = ViewState {
-        frustum,
-        planes: extract_planes(&three_d_to_glam(&(camera.projection() * camera.view()))),
-        position: three_d_vec3_to_glam_d(&camera.position()),
-        viewport_size: glam::dvec2(
-            camera.viewport().width as f64,
-            camera.viewport().height as f64,
-        ),
-        culling_volume: CullingVolume::new_matrix(three_d_to_glam(
-            &(camera.projection() * camera.view()),
-        )),
-        projection_matrix: three_d_to_glam(&camera.projection()),
-    };
-    return s;
 }
 
 impl TileCache {
@@ -823,200 +748,7 @@ impl CullingVolume {
     }
 }
 
-pub struct OrientedBoundingBox {
-    pub center: glam::DVec3,
-    pub half_axes: glam::DMat3,
-    pub inverse_half_axes: glam::DMat3,
-    pub lengths: glam::DVec3,
-}
 
-pub fn equals_epsilon(
-    left: glam::DVec3,
-    right: glam::DVec3,
-    relative_epsilon: f64,
-    absolute_epsilon: f64,
-) -> bool {
-    let diff = (left - right).abs();
-
-    if diff.x <= absolute_epsilon || diff.y <= absolute_epsilon || diff.z <= absolute_epsilon {
-        return true;
-    }
-    if diff.x <= relative_epsilon_to_absolute(left.x, left.x, relative_epsilon)
-        || diff.y <= relative_epsilon_to_absolute(left.y, left.y, relative_epsilon)
-        || diff.z <= relative_epsilon_to_absolute(left.z, left.z, relative_epsilon)
-    {
-        return true;
-    }
-    return false;
-}
-
-pub fn relative_epsilon_to_absolute(a: f64, b: f64, relative_epsilon: f64) -> f64 {
-    return relative_epsilon * a.abs().max(b.abs());
-}
-
-impl OrientedBoundingBox {
-    pub fn new(center: glam::DVec3, half_axes: glam::DMat3) -> Self {
-        Self {
-            center,
-            half_axes,
-            inverse_half_axes: half_axes.inverse(),
-            lengths: glam::dvec3(
-                half_axes.col(0).length(),
-                half_axes.col(1).length(),
-                half_axes.col(2).length(),
-            ) * 2.,
-        }
-    }
-
-    pub fn transform(&self, transformation: glam::DMat4) -> Self {
-        Self::new(
-            (transformation * glam::dvec4(self.center.x, self.center.y, self.center.z, 1.)).xyz(),
-            glam::dmat3(
-                transformation.col(0).xyz(),
-                transformation.col(1).xyz(),
-                transformation.col(1).xyz(),
-            ) * self.half_axes,
-        )
-    }
-
-    pub fn intersect_plane(&self, plane: &Plane) -> CullingResult {
-        let rad_effective = self.half_axes.col(0).dot(plane.normal).abs()
-            + self.half_axes.col(1).dot(plane.normal).abs()
-            + self.half_axes.row(2).dot(plane.normal).abs();
-        let distance_to_plane = plane.normal.dot(self.center + plane.d);
-        if distance_to_plane <= -rad_effective {
-            return CullingResult::Outside;
-        }
-        if distance_to_plane >= rad_effective {
-            return CullingResult::Inside;
-        }
-        return CullingResult::Intersecting;
-    }
-
-    pub fn compute_distance_squared_to_position(&self, position: glam::DVec3) -> f64 {
-        let offset = position - self.center;
-
-        let mut u = self.half_axes.col(0);
-        let mut v = self.half_axes.col(1);
-        let mut w = self.half_axes.col(2);
-
-        let uHalf = u.length();
-        let vHalf = v.length();
-        let wHalf = w.length();
-
-        let uValid = uHalf > 0.;
-        let vValid = vHalf > 0.;
-        let wValid = wHalf > 0.;
-
-        let mut numberOfDegenerateAxes = 0;
-        if (uValid) {
-            u /= uHalf;
-        } else {
-            numberOfDegenerateAxes += 1;
-        }
-
-        if (vValid) {
-            v /= vHalf;
-        } else {
-            numberOfDegenerateAxes += 1;
-        }
-
-        if (wValid) {
-            w /= wHalf;
-        } else {
-            numberOfDegenerateAxes += 1;
-        }
-        let mut validAxis1 = glam::DVec3::ZERO;
-        let mut validAxis2 = glam::DVec3::ZERO;
-        let mut validAxis3 = glam::DVec3::ZERO;
-
-        if (numberOfDegenerateAxes == 1) {
-            let mut degenerateAxis = u;
-            validAxis1 = v;
-            validAxis2 = w;
-
-            if (!vValid) {
-                degenerateAxis = v;
-                validAxis1 = u;
-            } else if (!wValid) {
-                degenerateAxis = w;
-                validAxis2 = u;
-            }
-
-            validAxis3 = validAxis1.cross(validAxis2);
-
-            if (!uValid) {
-                u = validAxis3;
-            } else if (!vValid) {
-                v = validAxis3;
-            } else {
-                w = validAxis3;
-            }
-        } else if (numberOfDegenerateAxes == 2) {
-            if (uValid) {
-                validAxis1 = u;
-            } else if (vValid) {
-                validAxis1 = v;
-            } else {
-                validAxis1 = w;
-            }
-
-            let mut crossVector = glam::dvec3(0., 1., 0.);
-            if (equals_epsilon(validAxis1, crossVector, 1e-3, 1e-3)) {
-                crossVector = glam::dvec3(1., 0., 0.);
-            }
-
-            validAxis2 = validAxis1.cross(crossVector).normalize();
-            validAxis3 = validAxis1.cross(validAxis2).normalize();
-
-            if (uValid) {
-                v = validAxis2;
-                w = validAxis3;
-            } else if (vValid) {
-                w = validAxis2;
-                u = validAxis3;
-            } else if (wValid) {
-                u = validAxis2;
-                v = validAxis3;
-            }
-        } else if (numberOfDegenerateAxes == 3) {
-            u = glam::dvec3(1., 0., 0.);
-            v = glam::dvec3(0., 1., 0.);
-            w = glam::dvec3(0., 0., 1.);
-        }
-
-        let pPrime = glam::dvec3(offset.dot(u), offset.dot(v), offset.dot(w));
-
-        let mut distanceSquared = 0.0;
-        let mut d = 0.;
-
-        if (pPrime.x < -uHalf) {
-            d = pPrime.x + uHalf;
-            distanceSquared += d * d;
-        } else if (pPrime.x > uHalf) {
-            d = pPrime.x - uHalf;
-            distanceSquared += d * d;
-        }
-
-        if (pPrime.y < -vHalf) {
-            d = pPrime.y + vHalf;
-            distanceSquared += d * d;
-        } else if (pPrime.y > vHalf) {
-            d = pPrime.y - vHalf;
-            distanceSquared += d * d;
-        }
-
-        if (pPrime.z < -wHalf) {
-            d = pPrime.z + wHalf;
-            distanceSquared += d * d;
-        } else if (pPrime.z > wHalf) {
-            d = pPrime.z - wHalf;
-            distanceSquared += d * d;
-        }
-
-        return distanceSquared;
-    }
-}
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum CullingResult {
@@ -1025,38 +757,3 @@ pub enum CullingResult {
     Inside = 1,
 }
 
-pub struct ViewState {
-    pub frustum: Frustum,
-    pub planes: [Plane; 6],
-    pub position: glam::DVec3,
-    pub viewport_size: glam::DVec2,
-    pub culling_volume: CullingVolume,
-    pub projection_matrix: glam::DMat4,
-}
-
-impl ViewState {
-    pub fn compute_screen_space_error(&self, geometric_error: f64, distance: f64) -> f64 {
-        let distance = distance.max(1e-7);
-        let mut center_ndc = self.projection_matrix * glam::dvec4(0., 0., -distance, 1.);
-        center_ndc /= center_ndc.w;
-        let mut error_offset_ndc =
-            self.projection_matrix * glam::dvec4(0., geometric_error, -distance, 1.);
-        error_offset_ndc /= error_offset_ndc.w;
-        let ndc_error = (error_offset_ndc - center_ndc).y;
-
-        return -ndc_error * self.viewport_size.y / 2.;
-    }
-
-    pub fn does_tile_meet_sse(&self, tile: &Tile) -> bool {
-        let distance = tile
-            .bounding
-            .compute_distance_squared_to_position(self.position)
-            .sqrt();
-        let sse = self
-            .compute_screen_space_error(tile.geometric_error, distance)
-            .abs();
-        // println!("sse {}", sse);
-        let maximum_screen_space_error = 16.0;
-        return sse < maximum_screen_space_error;
-    }
-}

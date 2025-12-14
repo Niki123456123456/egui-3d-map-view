@@ -63,7 +63,7 @@ impl eframe::App for App {
             ctx,
             target,
             6_378_000.0 - 15_000.,
-            50_000_000.0,
+            50_000_000.0, &mut 0.
         );
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {

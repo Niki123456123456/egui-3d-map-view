@@ -14,6 +14,7 @@ fn main() -> eframe::Result {
 }
 use eframe::egui;
 use egui::Color32;
+use three_d::{EuclideanSpace, InnerSpace, MetricSpace, SquareMatrix};
 
 struct App {
     tile_cache: Option<egui_3d_map_view::maps::TileCache>,
@@ -30,6 +31,7 @@ struct App {
     gpx_promise: Option<poll_promise::Promise<egui_3d_map_view::gpx::GpxRoute>>,
     gpx_routes: Vec<egui_3d_map_view::gpx::GpxRouteGPU>,
     m: three_d::ColorMaterial,
+    yaw: f32,
 }
 
 impl App {
@@ -39,7 +41,7 @@ impl App {
             three_d::Viewport::new_at_origo(512, 512),
             three_d::vec3(47702560.0, 0.0, -9691560.0),
             three_d::vec3(0.0, 0.0, 0.0),
-            three_d::vec3(0., 0., 1.),
+            three_d::vec3(0.5, 0., 0.5).normalize(),
             three_d::degrees(45.0),
             100.,        //0.1,
             1000000000., //1000.0,
@@ -56,7 +58,7 @@ impl App {
             None
         };
 
-         let  m= three_d::ColorMaterial::new(
+        let m = three_d::ColorMaterial::new(
             &context,
             &three_d::CpuMaterial {
                 albedo: three_d::Srgba::RED,
@@ -77,7 +79,8 @@ impl App {
             show_search: false,
             gpx_promise: None,
             gpx_routes: vec![],
-            m
+            m,
+            yaw: 0.,
         }
     }
 
@@ -103,6 +106,10 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let mut search_rect = egui::Rect::ZERO;
+
+        let min_distance = 6_378_000. - 15_000.;
+        let max_distance = 50_000_000.;
+        let max_pitch_distance = min_distance + 10_000.;
 
         egui::CentralPanel::default()
             .frame(egui::Frame::default().inner_margin(egui::Margin::ZERO))
@@ -167,8 +174,9 @@ impl eframe::App for App {
                             &mut self.camera,
                             ctx,
                             target,
-                            6_378_000.0 - 15_000.,
-                            50_000_000.0,
+                            min_distance,
+                            max_distance,
+                            &mut self.yaw,
                         );
                     }
                     self.view.render(
@@ -178,17 +186,38 @@ impl eframe::App for App {
                         Color32::TRANSPARENT,
                         1.0,
                         |viewport| {
-                            self.camera.set_viewport(viewport);
+                            let height = self.camera.target().distance(self.camera.position())
+                                - min_distance;
+                            let height_relativ = height / (max_pitch_distance - min_distance);
+                            let max_pitch = std::f32::consts::TAU / 4.;
+                            let pitch = if height_relativ < 1. {
+                                (1. - height_relativ) * max_pitch
+                            } else {
+                                0.
+                            };
+
+                            let mut cam = self.camera.clone();
+                            //cam.pitch(three_d::radians(pitch));
+
+                            // let mut dir = three_d::Matrix3::from_angle_y(three_d::Rad(self.yaw))
+                            //     * cam.view_direction();
+                            // // // rot_pitch(&mut dir, three_d::Rad(0.01 * delta.y));
+
+                            // cam.view =
+                            //     three_d::Mat4::look_to_rh(three_d::Point3::from_vec(cam.position()), dir, cam.up());
+
+                            cam.set_viewport(viewport);
                             if let Some(tile_cache) = &mut self.tile_cache {
                                 tile_cache.load(&self.context);
-                                tile_cache.render(
-                                    &self.camera,
-                                    &[&self.light],
-                                    self.show_bounding_boxes,
-                                );
+                                tile_cache.render(&cam, &[&self.light], self.show_bounding_boxes);
                             }
                             for route in self.gpx_routes.iter() {
-                                 three_d::Geometry::render_with_material(&route.mesh, &self.m, &self.camera, &[&self.light]);
+                                three_d::Geometry::render_with_material(
+                                    &route.mesh,
+                                    &self.m,
+                                    &cam,
+                                    &[&self.light],
+                                );
                             }
                         },
                     );
@@ -259,6 +288,14 @@ impl eframe::App for App {
                 ui.checkbox(&mut self.show_bounding_boxes, "show bounding boxes");
                 self.key_edit(ui);
 
+                let height = self.camera.target().distance(self.camera.position()) - min_distance;
+                let height_relativ = height / (max_distance - min_distance);
+                ui.label(format!(
+                    "height: {:.0} km {:.2} %",
+                    height / 1000.,
+                    height_relativ * 100.
+                ));
+                ui.label(format!("yaw: {:.2}", self.yaw / std::f32::consts::TAU));
                 // egui::ScrollArea::vertical().show(ui, |ui| {
                 //     egui_ltreeview::TreeView::new(ui.make_persistent_id("Names tree view")).show(
                 //         ui,
