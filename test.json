@@ -1,0 +1,60 @@
+{
+  "accessors": [
+    { "bufferView": 0, "componentType": 5121, "count": 753, "type": "SCALAR" },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 153,
+      "max": [2524576.0, 3963601.25, 3022101.5],
+      "min": [-4003306.5, -2525511.0, -3462940.0],
+      "type": "VEC3"
+    },
+    { "bufferView": 2, "componentType": 5126, "count": 153, "type": "VEC2" }
+  ],
+  "asset": {
+    "copyright": "Google;Data SIO, NOAA, U.S. Navy, NGA, GEBCO;Landsat / Copernicus",
+    "generator": "draco_decoder",
+    "version": "2.0"
+  },
+  "bufferViews": [
+    { "buffer": 0, "byteLength": 756, "target": 34963 },
+    { "buffer": 0, "byteLength": 1836, "byteOffset": 756, "target": 34962 },
+    { "buffer": 0, "byteLength": 1224, "byteOffset": 2592, "target": 34962 },
+    { "buffer": 0, "byteLength": 9060, "byteOffset": 3816 }
+  ],
+  "buffers": [{ "byteLength": 12876 }],
+  "extensionsRequired": ["KHR_materials_unlit"],
+  "extensionsUsed": ["KHR_materials_unlit"],
+  "images": [{ "bufferView": 3, "mimeType": "image/jpeg" }],
+  "materials": [
+    {
+      "extensions": { "KHR_materials_unlit": {} },
+      "pbrMetallicRoughness": { "baseColorTexture": { "index": 0 } }
+    }
+  ],
+  "meshes": [
+    {
+      "primitives": [
+        {
+          "attributes": { "POSITION": 1, "TEXCOORD_0": 2 },
+          "indices": 0,
+          "material": 0,
+          "mode": 4
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "matrix": [
+        1.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0,
+        -2398057.2350607286, 3361122.595186782, -2398057.235060729, 1.0
+      ],
+      "mesh": 0
+    }
+  ],
+  "samplers": [{ "wrapS": 33071, "wrapT": 33071 }],
+  "scene": 0,
+  "scenes": [{ "nodes": [0] }],
+  "textures": [{ "sampler": 0, "source": 0 }]
+}

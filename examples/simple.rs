@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use eframe::egui;
-use three_d::Object;
+use three_d::{Object, Zero};
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
@@ -83,7 +83,7 @@ impl eframe::App for App {
         }
 
         let target = self.camera.target();
-        egui_3d_map_view::orbitcontrol::handle_events(&mut self.camera, ctx, target, 0.1, 1000., &mut 0.);
+        egui_3d_map_view::orbitcontrol::handle_events(&mut self.camera, ctx, target, 0.1, 1000., &mut three_d::Vector2::zero());
         egui::CentralPanel::default().show(ctx, |ui| {
             let size = ui.available_size_before_wrap();
 

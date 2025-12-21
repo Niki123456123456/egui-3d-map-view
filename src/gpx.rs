@@ -15,14 +15,47 @@ pub fn open() -> poll_promise::Promise<GpxRoute> {
                             let lon = p.point().lng();
                             if let Some(ele) = p.elevation {
                                 let xyz = crate::maps::latlon_to_xyz(lat, lon, ele);
-                                points.push(Point { lat, lon, ele: ele + 12620., xyz });
+                                points.push(Point {
+                                    lat,
+                                    lon,
+                                    ele: ele + 12620.,
+                                    xyz,
+                                });
                             }
                         }
                     }
                 }
                 println!("got {}", points.len());
 
-                sender.send(GpxRoute { gpx, points });
+                let min_lat = points
+                    .iter()
+                    .map(|x| x.lat as f32)
+                    .reduce(f32::min)
+                    .unwrap_or_default();
+                let min_lon = points
+                    .iter()
+                    .map(|x| x.lon as f32)
+                    .reduce(f32::min)
+                    .unwrap_or_default();
+                let max_lat = points
+                    .iter()
+                    .map(|x| x.lat as f32)
+                    .reduce(f32::max)
+                    .unwrap_or_default();
+                let max_lon = points
+                    .iter()
+                    .map(|x| x.lon as f32)
+                    .reduce(f32::max)
+                    .unwrap_or_default();
+
+                sender.send(GpxRoute {
+                    gpx,
+                    points,
+                    min_lat,
+                    min_lon,
+                    max_lat,
+                    max_lon,
+                });
             }
         }
     });
@@ -33,6 +66,10 @@ pub fn open() -> poll_promise::Promise<GpxRoute> {
 pub struct GpxRoute {
     pub gpx: gpx::Gpx,
     pub points: Vec<Point>,
+    pub min_lat: f32,
+    pub min_lon: f32,
+    pub max_lat: f32,
+    pub max_lon: f32,
 }
 
 pub struct GpxRouteGPU {
@@ -42,18 +79,37 @@ pub struct GpxRouteGPU {
 
 impl GpxRouteGPU {
     pub fn new(route: GpxRoute, context: &three_d::Context) -> Self {
-        let mut lines = vec![];
-        for (i,p) in route.points.iter().enumerate() {
+        let mut points = vec![];
+        let border_ratio = 0.05;
+        for (i, p) in route.points.iter().enumerate() {
             if i > 0 {
-                let previous = &route.points[i-1]; lines.push(previous);
-                 lines.push(p);
+                let previous = &route.points[i - 1];
+                points.push(previous);
+                points.push(p);
             }
         }
         let mesh = crate::lines::LineMesh::from_vector(
             context,
-            lines
+            points
                 .iter()
                 .map(|x| three_d::vec3(x.xyz.x as f32, x.xyz.y as f32, x.xyz.z as f32))
+                .collect(),
+        );
+        let mesh = crate::lines::LineMesh::from_vector(
+            context,
+            points
+                .iter()
+                .map(|x| {
+                    three_d::vec3(
+                        border_ratio
+                            + (x.lat as f32 - route.min_lat) / (route.max_lat - route.min_lat)
+                                * (1. - 2. * border_ratio),
+                        border_ratio
+                            + (x.lon as f32 - route.min_lon) / (route.max_lon - route.min_lon)
+                                * (1. - 2. * border_ratio),
+                        0.5,
+                    )
+                })
                 .collect(),
         );
         Self { route, mesh }

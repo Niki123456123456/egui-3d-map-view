@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use eframe::egui;
 use egui::Color32;
+use three_d::Zero;
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
@@ -63,7 +64,7 @@ impl eframe::App for App {
             ctx,
             target,
             6_378_000.0 - 15_000.,
-            50_000_000.0, &mut 0.
+            50_000_000.0, &mut three_d::Vector2::zero()
         );
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {

@@ -14,7 +14,7 @@ fn main() -> eframe::Result {
 }
 use eframe::egui;
 use egui::Color32;
-use three_d::{EuclideanSpace, InnerSpace, MetricSpace, SquareMatrix};
+use three_d::{EuclideanSpace, InnerSpace, MetricSpace, SquareMatrix, Zero};
 
 struct App {
     tile_cache: Option<egui_3d_map_view::maps::TileCache>,
@@ -31,7 +31,7 @@ struct App {
     gpx_promise: Option<poll_promise::Promise<egui_3d_map_view::gpx::GpxRoute>>,
     gpx_routes: Vec<egui_3d_map_view::gpx::GpxRouteGPU>,
     m: three_d::ColorMaterial,
-    yaw: f32,
+    rotation : three_d::Vec2,
 }
 
 impl App {
@@ -41,7 +41,7 @@ impl App {
             three_d::Viewport::new_at_origo(512, 512),
             three_d::vec3(47702560.0, 0.0, -9691560.0),
             three_d::vec3(0.0, 0.0, 0.0),
-            three_d::vec3(0.5, 0., 0.5).normalize(),
+            three_d::vec3(0., 0., 1.),
             three_d::degrees(45.0),
             100.,        //0.1,
             1000000000., //1000.0,
@@ -80,7 +80,7 @@ impl App {
             gpx_promise: None,
             gpx_routes: vec![],
             m,
-            yaw: 0.,
+            rotation : three_d::Vector2::zero(),
         }
     }
 
@@ -176,11 +176,10 @@ impl eframe::App for App {
                             target,
                             min_distance,
                             max_distance,
-                            &mut self.yaw,
+                            &mut self.rotation,
                         );
                     }
                     self.view.render(
-                        frame,
                         &self.context,
                         rect.size(),
                         Color32::TRANSPARENT,
@@ -196,7 +195,15 @@ impl eframe::App for App {
                                 0.
                             };
 
-                            let mut cam = self.camera.clone();
+                            let mut cam: three_d::Camera = self.camera.clone();
+
+                            // rotate_around_with_fixed_right_direction(&mut cam, self.rotation);
+                            let pos = cam.position();
+                            // // cam.rotate_around_with_fixed_up(pos, self.rotation.x, self.rotation.y);
+                            // cam.rotate_around_with_fixed_up(pos, 0., std::f32::consts::TAU / 4.);
+                            // cam.rotate_around_with_fixed_up(pos, self.rotation.x, 0.);
+                            // cam.rotate_around_with_fixed_up(pos, 0., -std::f32::consts::TAU / 4.);
+                            rotate_around_with_fixed_right_direction(&mut cam, three_d::vec2(0., self.rotation.x));
                             //cam.pitch(three_d::radians(pitch));
 
                             // let mut dir = three_d::Matrix3::from_angle_y(three_d::Rad(self.yaw))
@@ -295,7 +302,9 @@ impl eframe::App for App {
                     height / 1000.,
                     height_relativ * 100.
                 ));
-                ui.label(format!("yaw: {:.2}", self.yaw / std::f32::consts::TAU));
+                ui.label(format!("yaw: {:.3}", self.rotation.x));
+                ui.label(format!("pitch: {:.3}", self.rotation.y));
+                
                 // egui::ScrollArea::vertical().show(ui, |ui| {
                 //     egui_ltreeview::TreeView::new(ui.make_persistent_id("Names tree view")).show(
                 //         ui,
@@ -392,5 +401,56 @@ fn show_tile_tree<'a>(
             show_tile_tree(&t.children, builder, tile_cache, level + 1);
             builder.close_dir();
         }
+    }
+}
+
+pub fn rotate_around_with_fixed_right_direction(
+    camera: &mut three_d::Camera,
+    rotation : three_d::Vec2
+) {
+    use three_d::{Camera, Vec3};
+    let point = camera.position();
+    // Rotations are about the origin -> translate to pivot, rotate, translate back
+    let position = camera.position() - point;
+    let target = camera.target() - point;
+
+    let right = camera.right_direction().normalize();
+    let view_dir = (target - position).normalize();
+
+    // Two-axis orbit:
+    // - rotate around fixed `right` (pitch-like)
+    // - rotate around "vertical" axis derived from view & right (yaw-like), still orthogonal to right
+    let k_pitch = right;
+    let k_yaw = right.cross(view_dir).normalize();
+
+    // Prepare cos/sin terms, inverted because controls rotate left/up while rotations follow RH rule
+    let cos_x = (-rotation.x).cos();
+    let sin_x = (-rotation.x).sin();
+    let cos_y = (-rotation.y).cos();
+    let sin_y = (-rotation.y).sin();
+
+    // Rodrigues rotation
+    let rodrigues = |v: Vec3, k: Vec3, cos: f32, sin: f32| -> Vec3 {
+        v * cos + k.cross(v) * sin + k * k.dot(v) * (1.0 - cos)
+    };
+
+    // Apply rotations
+    let position_x = rodrigues(position, k_pitch, cos_x, sin_x);
+    let target_x = rodrigues(target, k_pitch, cos_x, sin_x);
+
+    let position_xy = rodrigues(position_x, k_yaw, cos_y, sin_y);
+    let target_xy = rodrigues(target_x, k_yaw, cos_y, sin_y);
+
+    // Avoid the singularity where the camera looks exactly along ±right (yaw axis becomes unstable)
+    let new_dir = (target_xy - position_xy).normalize();
+    if new_dir.dot(right).abs() < 0.999 {
+        // Recompute an "up" consistent with fixed right and the new forward direction
+        let new_up = right.cross(new_dir).normalize();
+        camera.set_view(position_xy + point, target_xy + point, new_up);
+    } else {
+        // Fall back to pitch-only rotation
+        let new_dir_x = (target_x - position_x).normalize();
+        let new_up_x = right.cross(new_dir_x).normalize();
+        camera.set_view(position_x + point, target_x + point, new_up_x);
     }
 }

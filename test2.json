@@ -1,0 +1,63 @@
+{
+  "accessors": [
+    { "componentType": 5123, "count": 12639, "type": "SCALAR" },
+    {
+      "componentType": 5126,
+      "count": 5849,
+      "max": [25.550537109375, 27.02659034729004, 25.828536987304688],
+      "min": [-18.39920997619629, -27.145952224731445, -10.096685409545898],
+      "type": "VEC3"
+    },
+    { "componentType": 5126, "count": 5849, "type": "VEC2" }
+  ],
+  "asset": {
+    "copyright": "Google",
+    "generator": "draco_decoder",
+    "version": "2.0"
+  },
+  "bufferViews": [
+    { "buffer": 0, "byteLength": 14176 },
+    { "buffer": 0, "byteLength": 46216, "byteOffset": 14176 }
+  ],
+  "buffers": [{ "byteLength": 60392 }],
+  "extensionsRequired": ["KHR_draco_mesh_compression", "KHR_materials_unlit"],
+  "extensionsUsed": ["KHR_draco_mesh_compression", "KHR_materials_unlit"],
+  "images": [{ "bufferView": 1, "mimeType": "image/jpeg" }],
+  "materials": [
+    {
+      "extensions": { "KHR_materials_unlit": {} },
+      "pbrMetallicRoughness": { "baseColorTexture": { "index": 0 } }
+    }
+  ],
+  "meshes": [
+    {
+      "primitives": [
+        {
+          "attributes": { "POSITION": 1, "TEXCOORD_0": 2 },
+          "extensions": {
+            "KHR_draco_mesh_compression": {
+              "attributes": { "POSITION": 0, "TEXCOORD_0": 1 },
+              "bufferView": 0
+            }
+          },
+          "indices": 0,
+          "material": 0,
+          "mode": 4
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "matrix": [
+        1.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0,
+        3783153.7914050366, 5038319.022996956, -901961.22663775, 1.0
+      ],
+      "mesh": 0
+    }
+  ],
+  "samplers": [{ "wrapS": 33071, "wrapT": 33071 }],
+  "scene": 0,
+  "scenes": [{ "nodes": [0] }],
+  "textures": [{ "sampler": 0, "source": 0 }]
+}

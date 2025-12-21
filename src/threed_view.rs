@@ -163,7 +163,6 @@ fn create_buffers(
 fn create_textures(
     context: &three_d::Context,
     size: egui::Vec2,
-    frame: &mut eframe::Frame,
 ) -> TexturesContainer {
     let texture: three_d::Texture2D = three_d::Texture2D::new_empty::<[u8; 4]>(
         context,
@@ -182,14 +181,12 @@ fn create_textures(
         three_d::Wrapping::ClampToEdge,
         three_d::Wrapping::ClampToEdge,
     );
-    // let texture_id = frame.register_native_glow_texture(texture.id());
-    let gl = frame.gl().unwrap().as_ref();
+    let gl = &context.context;
     let program = create_program(gl);
     let (vao, vbo) = create_buffers(gl);
     return TexturesContainer {
         texture,
         depth_texture,
-        // texture_id: texture_id,
         program,
         vao,
         vbo,
@@ -207,7 +204,6 @@ impl Default for View {
 impl View {
     pub fn render(
         &mut self,
-        frame: &mut eframe::Frame,
         context: &three_d::Context,
         size: egui::Vec2,
         clear_color: egui::Color32,
@@ -216,7 +212,7 @@ impl View {
     ) {
         if size != self.size || self.textures.is_none() {
             self.size = size;
-            self.textures = Some(create_textures(context, size, frame));
+            self.textures = Some(create_textures(context, size));
         }
 
         if let Some(tex) = &mut self.textures {
@@ -246,13 +242,6 @@ impl View {
 
     pub fn show(&self, ui: &mut egui::Ui) {
         if let Some(tex) = &self.textures {
-            // let image = egui::Image::new(egui::load::SizedTexture::new(tex.texture_id, self.size))
-            //     .uv(egui::Rect::from_min_max(
-            //         egui::pos2(1.0, 0.0), // U axis reversed
-            //         egui::pos2(0.0, 1.0),
-            //     ));
-
-            // ui.add(image);
 
             let vao = tex.vao.clone();
             let vbo = tex.vbo.clone();
@@ -325,7 +314,7 @@ pub fn show_advanced(
     let context = get_or_insert_context(ui.ctx(), frame.gl().unwrap());
 
     let mut view: View = ctx.data(|d| d.get_temp(id)).unwrap_or_default();
-    view.render(frame, &context, size, clear_color, clear_depth, render);
+    view.render(&context, size, clear_color, clear_depth, render);
     view.show(ui);
     ctx.data_mut(|d| d.insert_temp(id, view));
 }
